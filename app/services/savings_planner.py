@@ -1,15 +1,33 @@
 import math
+from uuid import UUID
+
 from sqlalchemy.orm import Session
+
 from app.db.models import Debt
 
 
 def calculate_savings_plan(
     db: Session,
+    user_id: UUID,
     free_cash: float,
     target_amount: float,
 ):
-    # EMI that will be freed once debts are cleared
-    emi_rows = db.query(Debt.emi_amount).all()
+    """
+    Savings planner for a single user.
+
+    Monthly saving power = free_cash + total EMI
+    where total EMI is the sum of all current EMI obligations
+    (both fixed and flexible debts with an emi_amount).
+    """
+    # EMI that will be freed once this user's debts are cleared
+    emi_rows = (
+        db.query(Debt.emi_amount)
+        .filter(
+            Debt.user_id == user_id,
+            Debt.emi_amount.isnot(None),
+        )
+        .all()
+    )
     total_emi = sum(e[0] or 0 for e in emi_rows)
 
     monthly_saving_power = free_cash + total_emi

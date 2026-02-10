@@ -9,6 +9,17 @@ class UserCreate(BaseModel):
     name: str | None = None
 
 
+class UserUpdate(BaseModel):
+    """
+    User update payload.
+
+    For now, only profile fields are updatable.
+    Password/auth will be handled by a dedicated auth module later.
+    """
+    email: EmailStr | None = None
+    name: str | None = None
+
+
 class UserResponse(BaseModel):
     id: UUID
     email: EmailStr

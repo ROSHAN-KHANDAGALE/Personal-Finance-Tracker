@@ -1,34 +1,51 @@
 # app/services/planner_service.py
+from uuid import UUID
+
 from sqlalchemy.orm import Session
 
 from app.db.models import Transaction, Debt
 from app.services.debt_simulator import DebtItem, simulate_debt_clearance
 
 
-def calculate_financial_summary(db: Session):
+def calculate_financial_summary(db: Session, user_id: UUID):
+    """
+    Compute the financial summary for a single user.
+
+    - Total Income
+    - Living Expenses (exclude loan/EMI/debt categories)
+    - Mandatory EMI (only fixed-EMI debts, i.e. non-flexible)
+    - Free Cash = Income − Living Expenses − Mandatory EMI
+    """
     # Total Income
     income_rows = (
         db.query(Transaction.amount)
-        .filter(Transaction.type == "Income")
+        .filter(
+            Transaction.user_id == user_id,
+            Transaction.type == "Income",
+        )
         .all()
     )
     total_income = sum(i[0] for i in income_rows)
 
-    # Living Expenses (exclude debt-related)
+    # Living Expenses (exclude loan/EMI/debt categories)
     expense_rows = (
         db.query(Transaction.amount)
         .filter(
+            Transaction.user_id == user_id,
             Transaction.type == "Expense",
-            Transaction.category.notin_(["Loan", "EMI", "Debt"])
+            Transaction.category.notin_(["Loan", "EMI", "Debt"]),
         )
         .all()
     )
     living_expenses = sum(e[0] for e in expense_rows)
 
-    # Mandatory EMI (only non-flexible debts)
+    # Mandatory EMI (only FIXED_EMI debts => non-flexible)
     emi_rows = (
         db.query(Debt.emi_amount)
-        .filter(Debt.is_flexible.is_(False))
+        .filter(
+            Debt.user_id == user_id,
+            Debt.is_flexible.is_(False),
+        )
         .all()
     )
     mandatory_emi = sum(e[0] or 0 for e in emi_rows)
@@ -43,8 +60,13 @@ def calculate_financial_summary(db: Session):
     }
 
 
-def run_financial_planner(db: Session):
-    summary = calculate_financial_summary(db)
+def run_financial_planner(db: Session, user_id: UUID):
+    """
+    High-level planner for a single user:
+    - Calculates summary
+    - Runs debt clearance simulator
+    """
+    summary = calculate_financial_summary(db, user_id=user_id)
 
     if summary["free_cash"] < 0:
         return {
@@ -52,15 +74,22 @@ def run_financial_planner(db: Session):
             "error": "Expenses + EMI exceed income",
         }
 
-    debt_items = []
-    debts = db.query(Debt).all()
+    debts = (
+        db.query(Debt)
+        .filter(Debt.user_id == user_id)
+        .all()
+    )
 
+    debt_items: list[DebtItem] = []
     for d in debts:
         debt_items.append(
             DebtItem(
                 name=d.creditor_name,
                 remaining=float(d.remaining_amount),
-                emi=float(d.emi_amount) if d.emi_amount is not None else None,
+                # Only non-flexible debts are treated as fixed EMI
+                emi=float(d.emi_amount)
+                if d.emi_amount is not None and not d.is_flexible
+                else None,
                 is_flexible=d.is_flexible,
                 priority=d.priority,
             )
