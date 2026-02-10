@@ -25,7 +25,7 @@ def calculate_financial_summary(db: Session, user_id: UUID):
         )
         .all()
     )
-    total_income = sum(i[0] for i in income_rows)
+    total_income = float(sum(i[0] or 0 for i in income_rows))
 
     # Living Expenses (exclude loan/EMI/debt categories)
     expense_rows = (
@@ -37,7 +37,7 @@ def calculate_financial_summary(db: Session, user_id: UUID):
         )
         .all()
     )
-    living_expenses = sum(e[0] for e in expense_rows)
+    living_expenses = float(sum(e[0] or 0 for e in expense_rows))
 
     # Mandatory EMI (only FIXED_EMI debts => non-flexible)
     emi_rows = (
@@ -48,15 +48,16 @@ def calculate_financial_summary(db: Session, user_id: UUID):
         )
         .all()
     )
-    mandatory_emi = sum(e[0] or 0 for e in emi_rows)
+    # coerce Numeric/Decimal to float explicitly to avoid type errors
+    mandatory_emi = float(sum((e[0] or 0) for e in emi_rows))
 
-    free_cash = total_income - living_expenses - mandatory_emi
+    free_cash = float(total_income - living_expenses - mandatory_emi)
 
     return {
-        "total_income": round(total_income, 2),
-        "living_expenses": round(living_expenses, 2),
-        "mandatory_emi": round(mandatory_emi, 2),
-        "free_cash": round(free_cash, 2),
+        "total_income": round(float(total_income), 2),
+        "living_expenses": round(float(living_expenses), 2),
+        "mandatory_emi": round(float(mandatory_emi), 2),
+        "free_cash": round(float(free_cash), 2),
     }
 
 

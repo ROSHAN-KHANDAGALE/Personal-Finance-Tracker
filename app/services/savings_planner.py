@@ -28,9 +28,10 @@ def calculate_savings_plan(
         )
         .all()
     )
-    total_emi = sum(e[0] or 0 for e in emi_rows)
+    # Normalize to float to avoid Decimal/float mixing
+    total_emi = float(sum((e[0] or 0) for e in emi_rows))
 
-    monthly_saving_power = free_cash + total_emi
+    monthly_saving_power = float(free_cash) + total_emi
 
     if monthly_saving_power <= 0:
         return {

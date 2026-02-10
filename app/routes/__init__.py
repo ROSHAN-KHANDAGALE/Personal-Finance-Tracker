@@ -1,1 +1,1 @@
-from . import transactions, debts, planner, user
+from . import transactions, debts, planner, user, budgets, recurring, wallets
